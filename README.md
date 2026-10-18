@@ -5,6 +5,22 @@ normal de estaturas, cola sobre 190 cm y cálculo de su probabilidad.
 Incluye una película completa y cuatro escenas independientes. Sin audio;
 los textos en pantalla sirven de guía para una futura narración.
 
+## Jupyter / Google Colab
+
+Abre [`estaturas_jupyter.ipynb`](estaturas_jupyter.ipynb) y ejecuta las celdas
+en orden. El notebook incluye todo el código, prepara dependencias, renderiza
+y muestra el MP4 dentro de Jupyter. No requiere clonar el repositorio.
+En Google Colab incluye una celda para descargar el video.
+
+Usa Python 3.11 o posterior. La configuración inicial es vertical 9:16 en
+vista previa; cambia `CALIDAD` a `"final"` para exportar 1080 × 1920 a 30 fps.
+También puedes elegir formato horizontal. En Jupyter local, Cairo y Pango
+requieren instalación del sistema; la primera celda explica los permisos y
+comandos necesarios. No se ha validado en Windows nativo: usa WSL/Ubuntu.
+
+Los cambios en `estaturas.py` no actualizan automáticamente la copia incluida
+en el notebook; ambas versiones contienen las mismas escenas en esta entrega.
+
 ## Instalación
 
 Requiere Python 3.11 o posterior y las bibliotecas de desarrollo Cairo/Pango.
