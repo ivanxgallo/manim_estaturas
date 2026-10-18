@@ -14,8 +14,11 @@ en orden. El notebook incluye todo el código, prepara dependencias, renderiza
 y muestra el MP4 dentro de Jupyter. No requiere clonar el repositorio.
 En Google Colab incluye una celda para descargar el video.
 
-Usa Python 3.11 o posterior. La configuración inicial es vertical 9:16 en
-vista previa; cambia `CALIDAD` a `"final"` para exportar 1080 × 1920 a 30 fps.
+Usa Python 3.11 o posterior. La configuración inicial es vertical 9:16,
+**1080 × 1920 a 30 fps**, con cuadro de **9 × 16** unidades. Para pruebas
+rápidas puedes elegir `CALIDAD = "vista_previa"` (360 × 640, menor nitidez).
+El reproductor de Jupyter puede mostrar el video reducido; el MP4 mantiene
+la resolución seleccionada.
 También puedes elegir formato horizontal. En Jupyter local, Cairo/Pango y
 LaTeX requieren instalación del sistema; la primera celda explica los permisos y
 comandos necesarios. No se ha validado en Windows nativo: usa WSL/Ubuntu.
