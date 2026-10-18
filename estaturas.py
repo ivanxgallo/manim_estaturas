@@ -1,29 +1,39 @@
 """Cuatro planos sobre el TCL y una probabilidad de estatura.
 
 Render: python -m manim -ql estaturas.py EstaturasChile
-Los parámetros son ilustrativos: no constituyen datos medidos de Chile.
-No requiere LaTeX, audio, archivos externos ni conexión al renderizar.
+Parámetros proporcionados por el usuario; fuente de encuesta pendiente.
+Ver FUENTES.md para distinguirlos del análisis de microdatos ENS 2016-2017.
+Requiere LaTeX (TeX Live), Latin Modern y dvisvgm. Sin audio ni archivos externos.
 """
 
 from math import erfc, exp, isfinite, pi, sqrt
+import shutil
 
 import numpy as np
 from manim import (
     Axes, BLUE_C, Create, DashedLine, DOWN, FadeIn, FadeOut, GOLD,
-    GREEN_C, LaggedStart, LEFT, MovingCameraScene,
-    Rectangle, RIGHT, RoundedRectangle, Text,
+    GREEN_C, LaggedStart, LEFT, MathTex, MovingCameraScene,
+    Rectangle, RIGHT, RoundedRectangle, Tex, TexTemplate,
     Transform, UP, VGroup, WHITE, Write, config,
 )
 
 
-# Centímetros. Sustituir con estimaciones de una fuente y población definidas.
-MEDIA = 173.0
+# Centímetros. Valores proporcionados por el usuario; encuesta aún sin identificar.
+# No atribuir estos valores a ENS 2016-2017: los de la copia analizada son distintos.
+MEDIA = 172.0
 DESVIACION = 7.0
 UMBRAL = 190.0
-POBLACION = "Hombres adultos en Chile · ejemplo ilustrativo"
+POBLACION = "Hombres en Chile"
 SEMILLA = 2026
 FONDO = "#101827"
 TENUE = "#A9B8CC"
+
+# Latin Modern es la versión vectorial de la tipografía de Computer Modern.
+# El texto y las fórmulas pasan por el mismo compilador LaTeX y la misma plantilla.
+PLANTILLA_TEX = TexTemplate()
+PLANTILLA_TEX.add_to_preamble(r"\usepackage[utf8]{inputenc}")
+PLANTILLA_TEX.add_to_preamble(r"\usepackage[T1]{fontenc}")
+PLANTILLA_TEX.add_to_preamble(r"\usepackage{lmodern}")
 
 
 def probabilidad_superior(umbral=UMBRAL, media=MEDIA, desviacion=DESVIACION):
@@ -40,7 +50,28 @@ def decimal(valor, lugares=2):
 
 
 def texto(contenido, tam=28, color=WHITE):
-    return Text(contenido, font="DejaVu Sans", font_size=tam, color=color)
+    """Prosa serif compilada con LaTeX; el contenido se trata como texto literal."""
+    escapes = {
+        "\\": r"\textbackslash{}", "{": r"\{", "}": r"\}",
+        "$": r"\$", "&": r"\&", "%": r"\%", "#": r"\#", "_": r"\_",
+        "^": r"\textasciicircum{}", "~": r"\textasciitilde{}",
+        "\n": r"\\", "·": r"\textperiodcentered{}", "Φ": r"\(\Phi\)",
+    }
+    literal = "".join(escapes.get(caracter, caracter) for caracter in contenido)
+    return Tex(literal, tex_template=PLANTILLA_TEX, font_size=tam * 1.45, color=color)
+
+
+def ecuacion(contenido, tam=32, color=WHITE, ancho=None):
+    """Matemática LaTeX real, con fracciones, raíces y subíndices tipográficos."""
+    formula = MathTex(contenido, tex_template=PLANTILLA_TEX, font_size=tam * 1.3, color=color)
+    if ancho is not None and formula.width > ancho:
+        formula.scale_to_fit_width(ancho)
+    return formula
+
+
+def numero_tex(valor, lugares=None):
+    cadena = f"{valor:g}" if lugares is None else f"{valor:.{lugares}f}"
+    return cadena.replace(".", "{,}")
 
 
 def normal(x, media=0.0, desviacion=1.0):
@@ -52,13 +83,19 @@ class PlanoBase(MovingCameraScene):
         super().setup()
         self.camera.background_color = FONDO
         self.vertical = config.frame_height > config.frame_width
+        faltantes = [nombre for nombre in ("latex", "dvisvgm") if not shutil.which(nombre)]
+        if faltantes:
+            raise RuntimeError(
+                f"Falta instalar: {', '.join(faltantes)}. Ejecuta la primera celda del "
+                "notebook actualizado o consulta las dependencias LaTeX en README.md."
+            )
         # Validar también cuando se usa únicamente el plano introductorio.
         probabilidad_superior()
 
     def cabecera(self, numero, titulo, subtitulo):
         if self.vertical:
             titulos = {
-                1: "De muchas contribuciones\na una campana",
+                1: "Teorema central\ndel límite (TCL)",
                 2: "Un modelo para\nlas estaturas",
                 3: f"¿Qué tan probable es\nsuperar {UMBRAL:g} cm?",
                 4: "De una cola\na una probabilidad",
@@ -70,7 +107,7 @@ class PlanoBase(MovingCameraScene):
             if subtitulo == POBLACION:
                 subtitulo = POBLACION.replace(" · ", "\n")
             else:
-                subtitulo = "Una intuición matemática\nantes de hablar de estaturas"
+                subtitulo = "De muchas contribuciones\na una campana"
             sub = texto(subtitulo, 24, TENUE)
             if sub.width > 7.4:
                 sub.scale_to_fit_width(7.4)
@@ -85,15 +122,6 @@ class PlanoBase(MovingCameraScene):
         if grupo.width > 13.1:
             grupo.scale_to_fit_width(13.1).to_corner(UP + LEFT)
         self.play(FadeIn(grupo, shift=DOWN * 0.15))
-
-    def aviso(self, contenido="Parámetros ilustrativos · sin una fuente chilena validada"):
-        if self.vertical:
-            aviso = texto("Parámetros ilustrativos\nSin una fuente chilena validada", 21, TENUE)
-            aviso.move_to(LEFT * 0.25 + DOWN * 5.8)
-            self.add(aviso)
-            return
-        aviso = texto(contenido, 17, TENUE).to_edge(DOWN, buff=0.18)
-        self.add(aviso)
 
     def limpiar(self):
         self.play(*[FadeOut(m) for m in list(self.mobjects)], run_time=0.6)
@@ -112,7 +140,7 @@ class PlanoBase(MovingCameraScene):
         if self.vertical:
             ejes.shift(LEFT * 0.25)
         etiquetas = VGroup(*[
-            texto(f"{x:g}", 22 if self.vertical else 20, TENUE).next_to(ejes.c2p(x, 0), DOWN, buff=0.15)
+            ecuacion(numero_tex(x), 22 if self.vertical else 20, TENUE).next_to(ejes.c2p(x, 0), DOWN, buff=0.15)
             for x in np.arange(minimo, maximo + 1, 10)
         ])
         unidad = texto("Estatura (cm)", 24 if self.vertical else 20, TENUE).next_to(etiquetas, DOWN, buff=0.18)
@@ -124,8 +152,8 @@ class PlanoBase(MovingCameraScene):
         return ejes, VGroup(etiquetas, unidad, densidad), curva
 
     def plano_tcl(self):
-        self.cabecera(1, "De muchas contribuciones a una campana",
-                      "Una intuición matemática antes de hablar de estaturas")
+        self.cabecera(1, "Teorema central del límite (TCL)",
+                      "De muchas contribuciones a una campana")
         ejes = Axes(x_range=[-4, 4, 1], y_range=[0, 0.65, 0.2],
                     x_length=7.0 if self.vertical else 10.7,
                     y_length=3.7 if self.vertical else 3.0, tips=False,
@@ -133,15 +161,15 @@ class PlanoBase(MovingCameraScene):
         if self.vertical:
             ejes.shift(LEFT * 0.25)
         etiquetas = VGroup(*[
-            texto(str(x), 20, TENUE).next_to(ejes.c2p(x, 0), DOWN, buff=0.12)
+            ecuacion(str(x), 20, TENUE).next_to(ejes.c2p(x, 0), DOWN, buff=0.12)
             for x in range(-3, 4)
         ])
-        ecuacion = texto("Zₙ = (X₁ + ··· + Xₙ − nμ) / (σ√n)", 28).move_to(DOWN * 2.45)
-        condicion = texto("Variables i.i.d. · varianza finita y positiva", 20, TENUE).move_to(DOWN * 3.04)
+        formula_tcl = ecuacion(r"Z_n=\frac{X_1+\cdots+X_n-n\mu}{\sigma\sqrt{n}}", 32).move_to(DOWN * 2.7)
+        condicion = texto("Variables i.i.d. · varianza finita y positiva", 20, TENUE).move_to(DOWN * 3.55)
         if self.vertical:
-            ecuacion = texto("Zₙ = (X₁ + ··· + Xₙ − nμ)\n/ (σ√n)", 29).move_to(LEFT * 0.25 + DOWN * 3.2)
+            formula_tcl = ecuacion(r"Z_n=\frac{X_1+\cdots+X_n-n\mu}{\sigma\sqrt{n}}", 34, ancho=7.3).move_to(LEFT * 0.25 + DOWN * 3.25)
             condicion = texto("Variables independientes\ne idénticamente distribuidas\nVarianza finita y positiva", 23, TENUE).move_to(LEFT * 0.25 + DOWN * 4.65)
-        self.play(Create(ejes), FadeIn(etiquetas), Write(ecuacion), FadeIn(condicion))
+        self.play(Create(ejes), FadeIn(etiquetas), Write(formula_tcl), FadeIn(condicion))
         referencia = ejes.plot(normal, color=GOLD, stroke_width=3)
         leyenda = texto("Referencia: normal estándar", 19, GOLD).move_to(RIGHT * 3.5 + UP * 1.35)
         if self.vertical:
@@ -168,77 +196,74 @@ class PlanoBase(MovingCameraScene):
             return barras
 
         barras = histograma(1)
-        contador = texto("n = 1 contribución", 24, BLUE_C).move_to(LEFT * 3.2 + UP * 1.35)
+        contador = ecuacion(r"n=1\quad\text{contribución}", 26, BLUE_C).move_to(LEFT * 3.2 + UP * 1.35)
         if self.vertical:
             contador.move_to(LEFT * 0.25 + UP * 3.05)
         self.play(FadeIn(barras), FadeIn(contador))
         self.wait(1.5)
         for n in (2, 5, 15, 40):
-            nuevo = texto(f"n = {n} contribuciones", 24, BLUE_C).move_to(contador)
+            nuevo = ecuacion(rf"n={n}\quad\text{{contribuciones}}", 26, BLUE_C).move_to(contador)
             self.play(Transform(barras, histograma(n)), Transform(contador, nuevo), run_time=1.1)
             self.wait(1)
         self.wait(1.5)
 
     def plano_estaturas(self):
         self.cabecera(2, "Un modelo para las estaturas", POBLACION)
-        self.aviso()
         ejes, etiquetas, curva = self.ejes_alturas()
         self.play(Create(ejes), FadeIn(etiquetas))
         self.play(Create(curva), run_time=1.5)
         marcas = VGroup()
         for x, etiqueta, color in (
-            (MEDIA - DESVIACION, "μ − σ", TENUE),
-            (MEDIA, "μ", GOLD),
-            (MEDIA + DESVIACION, "μ + σ", TENUE),
+            (MEDIA - DESVIACION, r"\mu-\sigma", TENUE),
+            (MEDIA, r"\mu", GOLD),
+            (MEDIA + DESVIACION, r"\mu+\sigma", TENUE),
         ):
             linea = DashedLine(ejes.c2p(x, 0), ejes.c2p(x, normal(x, MEDIA, DESVIACION)), color=color)
-            rotulo = texto(etiqueta, 23, color).next_to(linea, UP, buff=0.1)
+            rotulo = ecuacion(etiqueta, 25, color).next_to(linea, UP, buff=0.1)
             marcas.add(VGroup(linea, rotulo))
         self.play(LaggedStart(*[FadeIn(m) for m in marcas], lag_ratio=0.35))
-        parametros = texto(f"μ = {MEDIA:g} cm     σ = {DESVIACION:g} cm", 28, GOLD).move_to(DOWN * 2.65)
-        detalle = texto("El TCL motiva la intuición; el ajuste requiere datos de esa población.", 20, TENUE).move_to(DOWN * 3.15)
+        parametros = ecuacion(rf"\mu={numero_tex(MEDIA)}\,\mathrm{{cm}}\qquad\sigma={numero_tex(DESVIACION)}\,\mathrm{{cm}}", 30, GOLD).move_to(DOWN * 2.65)
+        detalle = texto("La media fija el centro; la desviación estándar mide la dispersión.", 20, TENUE).move_to(DOWN * 3.15)
         if self.vertical:
-            parametros = texto(f"μ = {MEDIA:g} cm\nσ = {DESVIACION:g} cm", 33, GOLD).move_to(LEFT * 0.25 + DOWN * 3.5)
-            detalle = texto("El TCL motiva la intuición.\nEl ajuste requiere datos\nde esa población.", 23, TENUE).move_to(LEFT * 0.25 + DOWN * 4.8)
+            parametros = ecuacion(rf"\begin{{gathered}}\mu={numero_tex(MEDIA)}\,\mathrm{{cm}}\\\sigma={numero_tex(DESVIACION)}\,\mathrm{{cm}}\end{{gathered}}", 35, GOLD).move_to(LEFT * 0.25 + DOWN * 3.5)
+            detalle = texto("La media fija el centro.\nLa desviación estándar\nmide la dispersión.", 23, TENUE).move_to(LEFT * 0.25 + DOWN * 4.8)
         self.play(Write(parametros), FadeIn(detalle))
         self.wait(4)
 
     def plano_cola(self):
         self.cabecera(3, f"¿Cuál es la probabilidad de superar {UMBRAL:g} cm?", POBLACION)
-        self.aviso()
         ejes, etiquetas, curva = self.ejes_alturas()
         self.play(Create(ejes), FadeIn(etiquetas), Create(curva))
         extremo = ejes.x_range[1]
         area = ejes.get_area(curva, x_range=(UMBRAL, extremo), color=GREEN_C, opacity=0.85)
         linea = DashedLine(ejes.c2p(UMBRAL, 0), ejes.c2p(UMBRAL, normal(MEDIA, MEDIA, DESVIACION) * 0.85), color=GREEN_C)
-        umbral = texto(f"{UMBRAL:g} cm", 23, GREEN_C).next_to(linea, UP, buff=0.12)
+        umbral = ecuacion(rf"{numero_tex(UMBRAL)}\,\mathrm{{cm}}", 25, GREEN_C).next_to(linea, UP, buff=0.12)
         self.play(Create(linea), FadeIn(umbral), FadeIn(area), run_time=1.5)
         self.camera.frame.save_state()
         self.play(self.camera.frame.animate.scale(0.48).move_to(ejes.c2p(UMBRAL + DESVIACION * 0.45, normal(MEDIA, MEDIA, DESVIACION) * 0.16)), run_time=1.5)
         self.wait(2)
         self.play(self.camera.frame.animate.restore(), run_time=1.5)
-        formula = texto(f"P(H > {UMBRAL:g}) = 1 − Φ(({UMBRAL:g} − μ) / σ)", 29).move_to(DOWN * 2.75)
-        aclaracion = texto("Φ: función de distribución de la normal estándar · área total = 1", 19, TENUE).move_to(DOWN * 3.2)
+        formula = ecuacion(rf"P(H>{numero_tex(UMBRAL)})=1-\Phi\!\left(\frac{{{numero_tex(UMBRAL)}-\mu}}{{\sigma}}\right)", 29).move_to(DOWN * 2.9)
+        aclaracion = texto("Φ: función de distribución de la normal estándar · área total = 1", 18, TENUE).move_to(DOWN * 3.65)
         if self.vertical:
-            formula = texto(f"P(H > {UMBRAL:g})\n= 1 − Φ(({UMBRAL:g} − μ) / σ)", 30).move_to(LEFT * 0.25 + DOWN * 3.5)
-            aclaracion = texto("Φ: distribución acumulada\nde la normal estándar\nEl área total es 1", 23, TENUE).move_to(LEFT * 0.25 + DOWN * 4.85)
+            formula = ecuacion(rf"\begin{{gathered}}P(H>{numero_tex(UMBRAL)})\\=1-\Phi\!\left(\frac{{{numero_tex(UMBRAL)}-\mu}}{{\sigma}}\right)\end{{gathered}}", 33, ancho=7.3).move_to(LEFT * 0.25 + DOWN * 3.85)
+            aclaracion = texto("Φ: distribución acumulada\nde la normal estándar\nEl área total es 1", 23, TENUE).move_to(LEFT * 0.25 + DOWN * 5.35)
         self.play(Write(formula), FadeIn(aclaracion))
         self.wait(3)
 
     def plano_resultado(self):
         self.cabecera(4, "De una cola a una probabilidad", POBLACION)
-        self.aviso()
         z = (UMBRAL - MEDIA) / DESVIACION
         p = probabilidad_superior()
-        cuenta = texto(f"z = ({UMBRAL:g} − {MEDIA:g}) / {DESVIACION:g} ≈ {decimal(z)}", 32).move_to(UP * 0.85)
-        porcentaje = texto(f"P(H > {UMBRAL:g}) ≈ {decimal(p * 100)} %", 45, GREEN_C).move_to(DOWN * 0.15)
+        cuenta = ecuacion(rf"z=\frac{{{numero_tex(UMBRAL)}-{numero_tex(MEDIA)}}}{{{numero_tex(DESVIACION)}}}\approx {numero_tex(z, 2)}", 34).move_to(UP * 0.85)
+        porcentaje = ecuacion(rf"P(H>{numero_tex(UMBRAL)})\approx {numero_tex(p * 100, 2)}\,\%", 45, GREEN_C).move_to(DOWN * 0.15)
         equivalencia = texto(f"Aproximadamente 1 de cada {round(1 / p):,} personas".replace(",", "."), 29).move_to(DOWN * 1.15) if p > 0 else texto("Cola por debajo de la precisión numérica", 26)
         marco = RoundedRectangle(width=12.0, height=3.5, corner_radius=0.2,
                                  stroke_color=BLUE_C, stroke_opacity=0.45).move_to(DOWN * 0.15)
         if self.vertical:
-            cuenta = texto(f"z = ({UMBRAL:g} − {MEDIA:g}) / {DESVIACION:g}\n≈ {decimal(z)}", 29).move_to(LEFT * 0.25 + UP * 1.6)
-            porcentaje = texto(f"≈ {decimal(p * 100)} %", 61, GREEN_C).move_to(LEFT * 0.25)
-            encabezado = texto(f"P(H > {UMBRAL:g} cm)", 27, GREEN_C).next_to(porcentaje, UP, buff=0.2)
+            cuenta = ecuacion(rf"z=\frac{{{numero_tex(UMBRAL)}-{numero_tex(MEDIA)}}}{{{numero_tex(DESVIACION)}}}\approx {numero_tex(z, 2)}", 34, ancho=7.0).move_to(LEFT * 0.25 + UP * 1.6)
+            porcentaje = ecuacion(rf"\approx {numero_tex(p * 100, 2)}\,\%", 65, GREEN_C).move_to(LEFT * 0.25)
+            encabezado = ecuacion(rf"P(H>{numero_tex(UMBRAL)}\,\mathrm{{cm}})", 30, GREEN_C).next_to(porcentaje, UP, buff=0.2)
             porcentaje = VGroup(porcentaje, encabezado)
             equivalencia = texto(f"Aproximadamente\n1 de cada {round(1 / p):,} personas".replace(",", "."), 30).move_to(LEFT * 0.25 + DOWN * 1.6) if p > 0 else texto("Cola por debajo de\nla precisión numérica", 26).move_to(DOWN * 1.6)
             marco = RoundedRectangle(width=7.5, height=6, corner_radius=0.2,
@@ -247,13 +272,13 @@ class PlanoBase(MovingCameraScene):
         self.play(Write(porcentaje), run_time=1.5)
         self.play(FadeIn(equivalencia, shift=UP * 0.15))
         nota = VGroup(
-            texto("Resultado del modelo, no una frecuencia comprobada en Chile.", 22, GOLD),
-            texto("Para estimar esa frecuencia necesitamos datos y una población definida.", 20, TENUE),
+            texto(f"Probabilidad de superar {UMBRAL:g} cm.", 22, GOLD),
+            texto("Área bajo la cola derecha de la curva normal.", 20, TENUE),
         ).arrange(DOWN, buff=0.18).move_to(DOWN * 2.65)
         if self.vertical:
             nota = VGroup(
-                texto("Resultado del modelo.\nNo es una frecuencia\ncomprobada en Chile.", 25, GOLD),
-                texto("Necesitamos datos y una\npoblación definida.", 23, TENUE),
+                texto(f"Probabilidad de superar\n{UMBRAL:g} cm.", 25, GOLD),
+                texto("Área bajo la cola derecha\nde la curva normal.", 23, TENUE),
             ).arrange(DOWN, buff=0.3).move_to(LEFT * 0.25 + DOWN * 4.3)
         self.play(FadeIn(nota))
         self.wait(5)
